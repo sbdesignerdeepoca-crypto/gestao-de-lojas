@@ -1,0 +1,93 @@
+rules_version = '2';
+// Regras da plataforma Gestão de Lojas.
+// Cole tudo em: Firebase Console > Firestore Database > Regras > Publicar.
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    function signedIn() {
+      return request.auth != null;
+    }
+    function configPath() {
+      return /databases/$(database)/documents/plataforma/config;
+    }
+    function shopPath(slug) {
+      return /databases/$(database)/documents/lojas/$(slug);
+    }
+    // Dona da plataforma: a conta registrada no Painel Master.
+    function isMaster() {
+      return signedIn() && exists(configPath()) && get(configPath()).data.masterUid == request.auth.uid;
+    }
+    function isOwner(slug) {
+      return signedIn() && exists(shopPath(slug)) && get(shopPath(slug)).data.ownerUid == request.auth.uid;
+    }
+    // Loja liberada: status "active" e dentro do vencimento.
+    // Lojas antigas sem status continuam ativas até você definir um plano no Painel Master.
+    function isActive(slug) {
+      let s = get(shopPath(slug)).data;
+      let status = s.get('subscriptionStatus', '');
+      let exp = s.get('expiresAt', null);
+      return status == '' || (status == 'active' && (exp == null || exp > request.time));
+    }
+    function isActiveOwner(slug) {
+      return isOwner(slug) && isActive(slug);
+    }
+
+    // Configuração da plataforma (dona e WhatsApp de suporte).
+    match /plataforma/{docId} {
+      allow read: if true;
+      // Primeiro acesso: só a conta dona da gato-retinto (a administradora atual) pode se registrar como master, uma única vez.
+      allow create: if docId == 'config'
+        && signedIn()
+        && !exists(configPath())
+        && request.resource.data.masterUid == request.auth.uid
+        && get(shopPath('gato-retinto')).data.ownerUid == request.auth.uid;
+      allow update: if isMaster() && request.resource.data.masterUid == resource.data.masterUid;
+      allow delete: if false;
+    }
+
+    match /lojas/{slug} {
+      // A vitrine lê uma loja por vez; só você lista todas.
+      allow get: if true;
+      allow list: if isMaster();
+      // Cadastro novo: sempre começa aguardando aprovação.
+      allow create: if signedIn()
+        && slug.matches('^[a-z0-9-]{3,36}$')
+        && request.resource.data.keys().hasOnly(['ownerUid', 'storeName', 'subscriptionStatus', 'createdAt'])
+        && request.resource.data.ownerUid == request.auth.uid
+        && request.resource.data.storeName is string
+        && request.resource.data.storeName.size() > 1
+        && request.resource.data.storeName.size() <= 60
+        && request.resource.data.subscriptionStatus == 'pending'
+        && request.resource.data.createdAt == request.time;
+      // Só você (master) muda status, plano e vencimento. A dona da loja não pode ser trocada.
+      allow update: if isMaster() && request.resource.data.ownerUid == resource.data.ownerUid;
+      allow delete: if false;
+
+      // E-mail e WhatsApp da lojista: só ela e você leem.
+      match /privado/{docId} {
+        allow read: if isOwner(slug) || isMaster();
+        allow create: if docId == 'contato'
+          && signedIn()
+          && getAfter(shopPath(slug)).data.ownerUid == request.auth.uid
+          && request.resource.data.keys().hasOnly(['email', 'phone', 'createdAt']);
+        allow update: if isMaster();
+        allow delete: if false;
+      }
+
+      match /produtos/{productId} {
+        allow read: if isActive(slug) || isOwner(slug) || isMaster();
+        allow write: if isActiveOwner(slug);
+      }
+      match /configuracoes/{configId} {
+        allow read: if isActive(slug) || isOwner(slug) || isMaster();
+        allow write: if isActiveOwner(slug);
+      }
+      match /financeiro/{financeId} {
+        allow read, write: if financeId == 'privado' && isActiveOwner(slug);
+        match /meses/{monthId} {
+          allow read, write: if financeId == 'privado' && isActiveOwner(slug);
+        }
+      }
+    }
+  }
+}
