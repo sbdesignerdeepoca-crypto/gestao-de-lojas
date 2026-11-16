@@ -1035,7 +1035,7 @@ async function writeFinance(slug,payload,user){
   const incoming=payload.months||{},batch=writeBatch(db);
   for(const [month,ledger] of Object.entries(incoming))batch.set(doc(financeMonthsRef(slug),month),ledger);
   // Um mês ausente na cópia local não deve apagar histórico salvo no Firebase.
-  if(current.docs.length||Object.keys(incoming).length)await batch.commit();
+  if(Object.keys(incoming).length)await batch.commit();
 }
 let unsubFinance=null,unsubFinanceMonths=null,financeTimer=null;
 function stopFinanceListeners(){if(unsubFinance)unsubFinance();if(unsubFinanceMonths)unsubFinanceMonths();unsubFinance=null;unsubFinanceMonths=null;financeLoaded=false}
@@ -1050,7 +1050,7 @@ function listenShop(slug,user){
   if(unsubProducts)unsubProducts();if(unsubSettings)unsubSettings();
   remoteProducts=new Map();remoteSettingsJson="";
   let productsReady=false,settingsReady=false,cloudProducts=null,cloudSettings=null;
-  let initialized=false;const publish=()=>{if(!productsReady||!settingsReady)return;if((cloudProducts?.length||cloudSettings)){window.applyCloudStore({products:cloudProducts,settings:cloudSettings})}else if(!initialized&&ownerForCurrentShop&&currentUser){initialized=true;writeData(slug,window.getStoreData(),currentUser).catch(error=>window.handleCloudError("Não foi possível iniciar os dados da loja."))}};
+  const publish=()=>{if(!productsReady||!settingsReady)return;window.applyCloudStore({products:cloudProducts||[],settings:cloudSettings||null})};
   unsubProducts=onSnapshot(productsRef(slug),snapshot=>{
     productsReady=true;cloudProducts=snapshot.docs.map(item=>({id:item.id,...item.data()}));
     remoteProducts=new Map(cloudProducts.map(product=>[String(product.id),safeJson(product)]));publish();
