@@ -230,7 +230,7 @@ try{
   if(DEMO)fb=makeDemoFirebase();
   else{const base="https://www.gstatic.com/firebasejs/"+FIREBASE_VERSION+"/";const [a,b,c]=await Promise.all([import(base+"firebase-app.js"),import(base+"firebase-auth.js"),import(base+"firebase-firestore.js")]);fb={...a,...b,...c}}
 }catch(error){fatal("Não consegui carregar o Firebase. Confira a internet e toque em Tentar de novo.");throw error}
-const { initializeApp, getAuth, onAuthStateChanged, signInWithEmailAndPassword, sendPasswordResetEmail, signOut, getFirestore, doc, getDoc, setDoc, updateDoc, collection, onSnapshot, serverTimestamp, Timestamp, arrayUnion, deleteField } = fb;
+const { initializeApp, getAuth, onAuthStateChanged, signInWithEmailAndPassword, sendPasswordResetEmail, signOut, getFirestore, doc, getDoc, setDoc, updateDoc, collection, onSnapshot, serverTimestamp, Timestamp, arrayUnion, deleteField, runTransaction } = fb;
 if(DEMO)document.getElementById("demoBar").classList.remove("hidden");
 
 const firebaseConfig = {
@@ -349,7 +349,7 @@ function render(){
     const created=toMs(s.createdAt),value=Number(s.planValue||0);
     return '<article class="shop"><div><h3 class="shop-name">'+esc(s.storeName||s.id)+'<span class="badge b-'+st+'">'+LABEL[st]+'</span></h3>'+
       '<div class="shop-meta"><span>Link: <b>?loja='+esc(s.id)+'</b></span>'+(emailOf(s)?'<span>'+esc(emailOf(s))+'</span>':'')+(phoneOf(s)?'<span>WhatsApp: '+esc(phoneOf(s))+'</span>':'')+(value?'<span>Plano: <b>'+money(value)+'</b></span>':'')+(created?'<span>Cadastro: '+fmtDate(created)+'</span>':'')+'</div>'+
-      dueText(s,st)+(s.masterNote?'<div class="shop-note">'+esc(s.masterNote)+'</div>':'')+
+      dueText(s,st)+(noteCache[s.id]?'<div class="shop-note">'+esc(noteCache[s.id])+'</div>':'')+
       '</div><div class="actions">'+actionsFor(s,st)+'</div></article>';
   }).join(""):'<div class="empty">'+(shops.length?"Nenhuma loja neste filtro.":"Ainda não há lojas cadastradas.")+'</div>';
   $("list").querySelectorAll("[data-act]").forEach(b=>b.addEventListener("click",()=>handleAction(b.dataset.act,b.dataset.id)));
@@ -357,6 +357,30 @@ function render(){
 $("search").addEventListener("input",render);
 
 /* E-mail e WhatsApp da lojista ficam em lojas/{loja}/privado/contato (só ela e você leem). Lojas antigas: usa o WhatsApp da vitrine. */
+const noteCache={};
+const noteLoading=new Set();
+async function loadPrivateNotes(){
+  if(DEMO)return;
+  await Promise.all(shops.filter(s=>!(s.id in noteCache)&&!noteLoading.has(s.id)).map(async s=>{
+    noteLoading.add(s.id);
+    try{
+      const ref=doc(db,"lojas",s.id,"privado","master");
+      // Migrate a legacy public note atomically; delete it only after the private copy is secured.
+      const note=await runTransaction(db,async tx=>{
+        const pub=await tx.get(shopRef(s.id)),priv=await tx.get(ref);
+        const legacy=pub.exists()?pub.data().masterNote:undefined;
+        const value=priv.exists()?String(priv.data().note||""):String(legacy||"");
+        if(legacy!==undefined){
+          if(!priv.exists())tx.set(ref,{note:value,updatedAt:serverTimestamp()});
+          tx.update(shopRef(s.id),{masterNote:deleteField()});
+        }
+        return value;
+      });
+      noteCache[s.id]=note;
+    }catch(e){toast("Não foi possível proteger/carregar uma anotação. Publique as regras atualizadas do Firestore.")}
+    finally{noteLoading.delete(s.id)}
+  }));render();
+}
 async function loadMissingPhones(){
   const missing=shops.filter(s=>!(s.id in contactCache));
   if(!missing.length)return;
@@ -375,7 +399,15 @@ function handleAction(act,id){
   if(act==="reactivate"){const exp=toMs(s.expiresAt);if(exp!==null&&exp<=Date.now())return openPlan(s,"renew");return setStatus(s,"active","Loja reativada.")}
   if(act==="suspend"){if(confirm("Suspender a loja “"+(s.storeName||s.id)+"”? A vitrine sai do ar e o painel trava, mas nada é apagado."))setStatus(s,"suspended","Loja suspensa.");return}
   if(act==="reject"){if(confirm("Recusar o cadastro de “"+(s.storeName||s.id)+"”?"))setStatus(s,"rejected","Cadastro recusado.");return}
-  if(act==="note"){const text=prompt("Anotação sobre esta loja (só você vê):",s.masterNote||"");if(text===null)return;updateDoc(shopRef(id),{masterNote:text.trim()}).then(()=>toast("Anotação salva.")).catch(err=>toast(friendly(err)))}
+  if(act==="note"){
+    if(!DEMO&&!(id in noteCache)){toast("Aguarde o carregamento da anotação privada. Confira as regras se a mensagem persistir.");return}
+    const text=prompt("Anotação sobre esta loja (só você vê):",noteCache[id]||"");
+    if(text===null)return;
+    if(DEMO){noteCache[id]=text.trim();render();return}
+    setDoc(doc(db,"lojas",id,"privado","master"),{note:text.trim(),updatedAt:serverTimestamp()})
+      .then(()=>{noteCache[id]=text.trim();render();toast("Anotação privada salva.")})
+      .catch(()=>toast("Não foi possível salvar. Publique as regras atualizadas do Firestore."));
+  }
 }
 async function setStatus(s,status,ok){try{await updateDoc(shopRef(s.id),{subscriptionStatus:status,statusChangedAt:serverTimestamp()});toast(ok)}catch(err){toast(friendly(err))}}
 function friendly(err){return err?.code==="permission-denied"?"O Firebase recusou. Confira se as regras novas foram publicadas.":"Não foi possível salvar. Confira a internet e tente de novo."}
@@ -444,7 +476,7 @@ async function enterAs(user){
   $("supportPhone").value=config.whatsapp||"";
   show("viewDash");
   if(unsubShops)unsubShops();
-  unsubShops=onSnapshot(collection(db,"lojas"),snapshot=>{shops=snapshot.docs.map(d=>({id:d.id,...d.data()}));render();loadMissingPhones()},()=>toast("Não foi possível carregar as lojas."));
+  unsubShops=onSnapshot(collection(db,"lojas"),snapshot=>{shops=snapshot.docs.map(d=>({id:d.id,...d.data()}));render();loadMissingPhones();loadPrivateNotes()},()=>toast("Não foi possível carregar as lojas."));
 }
 $("loginForm").addEventListener("submit",async e=>{
   e.preventDefault();$("loginMsg").textContent="";$("loginBtn").disabled=true;
@@ -460,3 +492,4 @@ Object.assign(window,{logout,resetPassword,claimMaster,saveSupport,confirmPlan,c
 </script>
 </body>
 </html>
+

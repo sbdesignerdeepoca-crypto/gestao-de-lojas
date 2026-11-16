@@ -65,7 +65,9 @@ service cloud.firestore {
 
       // E-mail e WhatsApp da lojista: só ela e você leem.
       match /privado/{docId} {
-        allow read: if isOwner(slug) || isMaster();
+        allow read: if (docId == 'contato' && isOwner(slug)) || isMaster();
+        allow create: if docId == 'master' && isMaster()
+          && request.resource.data.keys().hasOnly(['note', 'updatedAt']);
         allow create: if docId == 'contato'
           && signedIn()
           && getAfter(shopPath(slug)).data.ownerUid == request.auth.uid
@@ -91,3 +93,4 @@ service cloud.firestore {
     }
   }
 }
+

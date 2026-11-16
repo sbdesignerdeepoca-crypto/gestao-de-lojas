@@ -664,7 +664,7 @@ function localDate(){const d=new Date();return d.getFullYear()+"-"+String(d.getM
 function monthFromDate(date){return String(date||localDate()).slice(0,7)}
 function parseFinanceAmount(value){const raw=String(value??"").trim();return Number(raw.includes(",")&&raw.includes(".")?raw.replace(/\./g,"").replace(",","."):raw.replace(",","."))}
 function selectedFinanceMonth(){return document.getElementById("financeMonth")?.value||monthFromDate(localDate())}
-function renderFinance(){const select=document.getElementById("financeMonth");if(!select)return;const current=select.value||monthFromDate(localDate()),months=Object.keys(financeData.months||{}).sort().reverse();if(!months.includes(monthFromDate(localDate())))months.unshift(monthFromDate(localDate()));select.innerHTML=months.map(m=>'<option value="'+m+'">'+m.split("-").reverse().join("/")+'</option>').join("");select.value=months.includes(current)?current:months[0];const ledger=financeData.months[select.value]||{sales:[],expenses:[]},sales=ledger.sales||[],expenses=ledger.expenses||[],revenue=sales.reduce((n,x)=>n+Number(x.amount||0),0),cost=sales.reduce((n,x)=>n+Number(x.cost||0),0),spent=expenses.reduce((n,x)=>n+Number(x.amount||0),0),stock=data.products.filter(p=>p.status!=="sold").reduce((n,p)=>n+Number(financeData.costs[p.id]||0),0);document.getElementById("financeSummary").innerHTML=[['Vendas do mês',revenue],['Custo das peças vendidas',cost],['Despesas registradas',spent],['Lucro líquido estimado',revenue-cost-spent]].map((x,i)=>'<div class="finance-card '+(i===3?'profit':'')+'"><span>'+x[0]+'</span><b>'+money(x[1])+'</b></div>').join('')+'<div class="finance-card"><span>Investido no estoque disponível</span><b>'+money(stock)+'</b></div>';document.getElementById("financeSales").innerHTML=sales.length?sales.map(s=>'<div class="finance-row"><div><b>'+escapeHtml(s.name||'Peça')+'</b><small>'+escapeHtml(s.date||'')+' · Venda '+money(s.amount)+' · Custo '+money(s.cost||0)+'</small></div><b class="finance-profit">'+money(Number(s.amount||0)-Number(s.cost||0))+'</b></div>').join(''):'<div class="empty">Nenhuma venda registrada neste mês.</div>';document.getElementById("financeExpenses").innerHTML=expenses.length?expenses.map(x=>'<div class="finance-row"><div><b>'+escapeHtml(x.name||'Despesa')+'</b><small>'+escapeHtml(x.date||'')+'</small></div><div style="display:flex;gap:8px;align-items:center"><b>'+money(x.amount)+'</b><button type="button" onclick="deleteExpense(\''+escapeHtml(select.value)+'\',\''+escapeHtml(x.id)+'\')">Excluir</button></div></div>').join(''):'<div class="empty">Nenhuma despesa neste mês.</div>';document.getElementById("financeMonthStatus").textContent="Os lançamentos de cada mês ficam salvos para consulta posterior.";const date=document.getElementById("expenseDate");if(date&&!date.value)date.value=localDate()}
+function renderFinance(){const select=document.getElementById("financeMonth");if(!select)return;const current=select.value||monthFromDate(localDate()),months=Object.keys(financeData.months||{}).sort().reverse();if(!months.includes(monthFromDate(localDate())))months.unshift(monthFromDate(localDate()));select.innerHTML=months.map(m=>'<option value="'+m+'">'+m.split("-").reverse().join("/")+'</option>').join("");select.value=months.includes(current)?current:months[0];const ledger=financeData.months[select.value]||{sales:[],expenses:[]},sales=ledger.sales||[],expenses=ledger.expenses||[],revenue=sales.reduce((n,x)=>n+Number(x.amount||0),0),cost=sales.reduce((n,x)=>n+Number(x.cost||0),0),spent=expenses.reduce((n,x)=>n+Number(x.amount||0),0),stock=data.products.filter(p=>p.status!=="sold").reduce((n,p)=>n+Number(financeData.costs[p.id]||0)*stockOf(p),0);document.getElementById("financeSummary").innerHTML=[['Vendas do mês',revenue],['Custo das peças vendidas',cost],['Despesas registradas',spent],['Lucro líquido estimado',revenue-cost-spent]].map((x,i)=>'<div class="finance-card '+(i===3?'profit':'')+'"><span>'+x[0]+'</span><b>'+money(x[1])+'</b></div>').join('')+'<div class="finance-card"><span>Investido no estoque disponível</span><b>'+money(stock)+'</b></div>';document.getElementById("financeSales").innerHTML=sales.length?sales.map(s=>'<div class="finance-row"><div><b>'+escapeHtml(s.name||'Peça')+'</b><small>'+escapeHtml(s.date||'')+' · Venda '+money(s.amount)+' · Custo '+money(s.cost||0)+'</small></div><b class="finance-profit">'+money(Number(s.amount||0)-Number(s.cost||0))+'</b></div>').join(''):'<div class="empty">Nenhuma venda registrada neste mês.</div>';document.getElementById("financeExpenses").innerHTML=expenses.length?expenses.map(x=>'<div class="finance-row"><div><b>'+escapeHtml(x.name||'Despesa')+'</b><small>'+escapeHtml(x.date||'')+'</small></div><div style="display:flex;gap:8px;align-items:center"><b>'+money(x.amount)+'</b><button type="button" onclick="deleteExpense(\''+escapeHtml(select.value)+'\',\''+escapeHtml(x.id)+'\')">Excluir</button></div></div>').join(''):'<div class="empty">Nenhuma despesa neste mês.</div>';document.getElementById("financeMonthStatus").textContent="Os lançamentos de cada mês ficam salvos para consulta posterior.";const date=document.getElementById("expenseDate");if(date&&!date.value)date.value=localDate()}
 function saveExpense(e){e.preventDefault();const name=document.getElementById("expenseName").value.trim(),amount=Number(document.getElementById("expenseAmount").value),date=document.getElementById("expenseDate").value;if(!name||!Number.isFinite(amount)||amount<=0||!date)return toast("Confira descrição, valor e data da despesa.");const month=monthFromDate(date);financeData.months[month]??={sales:[],expenses:[]};financeData.months[month].expenses.push({id:"e-"+Date.now(),name,amount,date});persistFinance();e.currentTarget.reset();document.getElementById("expenseDate").value=localDate();document.getElementById("financeMonth").value=month;renderFinance();toast("Despesa salva no mês correspondente.")}
 function deleteExpense(month,id){if(!confirm("Excluir esta despesa do histórico?"))return;const ledger=financeData.months[month];if(!ledger)return;ledger.expenses=(ledger.expenses||[]).filter(item=>String(item.id)!==String(id));if(!(ledger.expenses||[]).length&&!(ledger.sales||[]).length)delete financeData.months[month];persistFinance();renderFinance();toast("Despesa removida.")}
 function applyCloudFinance(value){financeData={...blankFinance(),...(value||{}),costs:value?.costs||{},months:value?.months||{}};financeLoaded=true;saveFinanceLocal();renderFinance()}
@@ -815,9 +815,9 @@ function renderAdmin(){
  document.getElementById("logoPreview").textContent=data.settings.logo?"Logo carregada e salva neste navegador. Escolha outra imagem para substituir.":"Nenhuma logo adicionada. Carregue a logo da sua loja quando quiser.";
  renderOrders();
 }
-function markSold(id){const p=data.products.find(x=>x.id===id);if(p){p.status="sold";persist();renderProducts();toast("Peça marcada como vendida.")}}
+async function markSold(id){const p=data.products.find(x=>String(x.id)===String(id));if(!p)return;if(!window.isStoreOwner)return toast('Entre como proprietária.');if(!confirm('Confirmar a venda de 1 unidade de "'+p.name+'" por '+money(p.price)+'?'))return;try{await window.firebaseBridge.recordSale(storeId,String(id));toast('Venda salva no estoque e no financeiro.')}catch(e){toast(e.message||'Não foi possível registrar a venda.')}}
 function restoreItem(id){const p=data.products.find(x=>x.id===id);if(p){p.status="available";persist();renderProducts();toast("Peça voltou à vitrine.")}}
-async async function deleteItem(id){const p=data.products.find(x=>String(x.id)===String(id));if(!p)return toast("Peça não encontrada.");if(!confirm('Excluir definitivamente "'+p.name+'"? Esta ação não pode ser desfeita.'))return;if(!window.isStoreOwner||!window.firebaseBridge?.deleteProduct)return toast("Entre como proprietária para excluir.");try{await window.firebaseBridge.deleteProduct(storeId,String(id));data.products=data.products.filter(x=>String(x.id)!==String(id));cart=cart.filter(x=>String(x.id)!==String(id));if(typeof saveCart==="function")saveCart();persist(true);renderProducts();renderAdmin();renderCart();toast("Peça excluída da loja.")}catch(error){toast("Falha ao excluir. Confira sua conexão e tente novamente.")}}
+async function deleteItem(id){if(!confirm('Excluir este produto definitivamente?'))return;try{await window.firebaseBridge.deleteProduct(storeId,String(id));toast('Produto excluído.')}catch(e){toast(e.message||'Não foi possível excluir.')}}
 function renderOrders(){
  const el=document.getElementById("orderList");if(!el)return;
  el.innerHTML=data.orders.length?data.orders.map(o=>'<div class="order-card"><div style="display:flex;justify-content:space-between;gap:10px;align-items:center"><b>'+escapeHtml(o.id)+' · '+escapeHtml(o.buyer)+'</b><span class="order-state '+(o.status==="paid"?"paid":"")+'">'+(o.status==="paid"?"Pago (simulado)":"Aguardando Pix")+'</span></div><div class="admin-note" style="margin-top:8px">'+o.items.map(i=>escapeHtml(i.name)+" · "+escapeHtml(i.code)).join("<br>")+'<br>Total: <b>'+money(o.total)+'</b> · WhatsApp: '+escapeHtml(o.phone)+'</div></div>').join(""):'<div class="empty">Ainda não há pedidos.</div>';
@@ -960,7 +960,7 @@ function renderAdmin(){
 }
 function parseCoupons(text){return String(text||"").split(/\n+/).map(l=>l.trim()).filter(Boolean).map(l=>{const m=/^([A-Za-z0-9_-]{2,24})\s+(R\$\s*)?([\d.,]+)\s*(%)?$/i.exec(l);if(!m)return null;const value=Number(m[3].replace(/\./g,"").replace(",","."));if(!(value>0))return null;return{code:m[1].toUpperCase(),kind:m[4]?"%":"R$",value}}).filter(Boolean)}
 function saveSettings(){data.settings.pix=document.getElementById("pixKey").value.trim();data.settings.holder=document.getElementById("pixHolder").value.trim();data.settings.shopWhatsApp=document.getElementById("shopWhatsApp").value.replace(/\D/g,"");const raw=document.getElementById("salesCoupons").value,coupons=parseCoupons(raw),lines=raw.split(/\n+/).filter(l=>l.trim()).length;data.settings.sales={pix:Number(document.getElementById("salesPix").value)||0,inst:Number(document.getElementById("salesInst").value)||1,instMin:Number(document.getElementById("salesInstMin").value)||0,low:Number(document.getElementById("salesLow").value)||5,giftOn:document.getElementById("giftOn").checked,giftMin:Number(document.getElementById("giftMin").value)||0,giftName:document.getElementById("giftName").value.trim(),coupons};persist();renderProducts();toast(coupons.length<lines?"Salvo. Alguns cupons foram ignorados: use o formato CODIGO 10% ou CODIGO R$ 20.":"Dados de venda salvos.")}
-function markSold(id){const p=data.products.find(x=>String(x.id)===String(id));if(!p)return;if(!window.isStoreOwner)return toast("Entre como proprietária para registrar a venda.");const st=stockOf(p);if(st<1)return toast("Produto sem estoque.");if(!confirm('Confirmar a venda de 1 unidade de "'+p.name+'" por '+money(p.price)+'? O valor será lançado no financeiro.'))return;const month=monthFromDate(localDate());financeData.months[month]??={sales:[],expenses:[]};financeData.months[month].sales??=[];financeData.months[month].sales.push({id:"s-"+Date.now()+"-"+Math.random().toString(36).slice(2,7),name:p.name,productId:String(p.id),date:localDate(),amount:Number(p.price)||0,cost:Number(financeData.costs[String(p.id)]||0)});if(st>1){p.stock=st-1}else{p.status="sold";p.stock=0}persistFinance();persist();renderProducts();renderFinance();toast("Venda registrada no estoque e no financeiro.")}
+async function markSold(id){const p=data.products.find(x=>String(x.id)===String(id));if(!p)return;if(!window.isStoreOwner)return toast('Entre como proprietária.');if(!confirm('Confirmar a venda de 1 unidade de "'+p.name+'" por '+money(p.price)+'?'))return;try{await window.firebaseBridge.recordSale(storeId,String(id));toast('Venda salva no estoque e no financeiro.')}catch(e){toast(e.message||'Não foi possível registrar a venda.')}}
 function restoreItem(id){const p=data.products.find(x=>x.id===id);if(p){p.status="available";if(stockOf(p)<1)p.stock=1;persist();renderProducts();toast("Voltou para a vitrine.")}}
 async function saveProduct(e){
  e.preventDefault();const input=document.getElementById("pImage"),files=[...input.files],button=document.getElementById("productSubmit"),existing=editingProductId?data.products.find(item=>String(item.id)===String(editingProductId)):null,t=typeInfo();
@@ -1011,37 +1011,92 @@ const shopIsActive=shop=>{if(!shop)return false;if(!shop.subscriptionStatus)retu
 const platformConfigPromise=getDoc(doc(db,"plataforma","config")).then(snap=>snap.exists()?snap.data():{}).catch(()=>({}));
 platformConfigPromise.then(cfg=>{window.platformWhatsApp=String(cfg.whatsapp||"");window.refreshPlanBanner?.()});
 
-async function writeData(slug,payload,user){
-  const shopSnap=await getDoc(shopRef(slug));
-  if(!shopSnap.exists()||shopSnap.data().ownerUid!==user.uid||!shopIsActive(shopSnap.data()))throw Object.assign(new Error("Esta loja não está liberada para gravações."),{code:"permission-denied"});
-  const settingValue={settings:payload.settings||{}},settingJson=safeJson(settingValue);
-  if(settingJson!==remoteSettingsJson){await setDoc(settingsRef(slug),settingValue);remoteSettingsJson=settingJson}
-  const incoming=new Map((payload.products||[]).map(product=>[String(product.id),product]));
-  const operations=[];
-  for(const [id,product] of incoming){const json=safeJson(product);if(remoteProducts.get(id)!==json)operations.push({type:"set",id,product,json})}
-  // Exclusões exigem confirmação e ação direta; snapshots locais nunca apagam produtos.
-  for(let offset=0;offset<operations.length;offset+=400){
-    const batch=writeBatch(db);
-    for(const op of operations.slice(offset,offset+400)){const ref=doc(productsRef(slug),op.id);batch.set(ref,op.product)}
-    await batch.commit();
+
+// Three-way merge: keep remote changes, apply only local edits, reject conflicting edits.
+const missing=Symbol('missing');
+const equal=(a,b)=>a===b||(a!==missing&&b!==missing&&JSON.stringify(a)===JSON.stringify(b));
+function mergeChanges(base,local,remote){
+  if(equal(base,local))return remote;
+  if(equal(base,remote)||equal(local,remote))return local;
+  const object=v=>v!==missing&&v!==null&&typeof v==='object'&&!Array.isArray(v);
+  if(object(base)&&object(local)&&object(remote)){
+    const out={};
+    for(const key of new Set([...Object.keys(base),...Object.keys(local),...Object.keys(remote)])){
+      const value=mergeChanges(Object.hasOwn(base,key)?base[key]:missing,Object.hasOwn(local,key)?local[key]:missing,Object.hasOwn(remote,key)?remote[key]:missing);
+      if(value!==missing)out[key]=value;
+    }return out;
   }
-  remoteProducts=new Map([...incoming].map(([id,product])=>[id,safeJson(product)]));
+  if(Array.isArray(base)&&Array.isArray(local)&&Array.isArray(remote)&&[...base,...local,...remote].every(x=>x&&typeof x==='object'&&x.id)){
+    const maps=[base,local,remote].map(a=>Object.fromEntries(a.map(x=>[String(x.id),x])));
+    return Object.values(mergeChanges(...maps));
+  }
+  throw Object.assign(new Error('Este dado mudou em outro aparelho. Recarregue e tente novamente; a alteração não foi gravada.'),{code:'store/conflict'});
+}
+const captureStore=()=>({products:new Map(remoteProducts),settings:remoteSettingsJson});
+let remoteFinance={costs:{},months:{}};
+const captureFinance=()=>JSON.parse(JSON.stringify(remoteFinance));
+async function commitChanges(slug,user,changes){
+  if(!changes.length)return;
+  if(changes.length>400)throw Error('Muitas alterações de uma vez. Salve em grupos menores.');
+  await runTransaction(db,async tx=>{
+    const owner=await tx.get(shopRef(slug));
+    if(!owner.exists()||owner.data().ownerUid!==user.uid||!shopIsActive(owner.data()))throw Object.assign(new Error('Loja sem permissão para gravar.'),{code:'permission-denied'});
+    const snapshots=[];
+    for(const change of changes)snapshots.push(await tx.get(change.ref));
+    const merged=changes.map((c,i)=>mergeChanges(c.base,c.value,snapshots[i].exists()?snapshots[i].data():missing));
+    changes.forEach((c,i)=>{if(merged[i]===missing)tx.delete(c.ref);else tx.set(c.ref,merged[i])});
+  });
+}
+async function writeData(slug,payload,user,base=captureStore()){
+  const changes=[],settings={settings:payload.settings||{}},oldSettings=base.settings?JSON.parse(base.settings):missing;
+  if(!equal(oldSettings,settings))changes.push({ref:settingsRef(slug),base:oldSettings,value:settings});
+  // Deletions use deleteProduct; an absent product in a stale page never deletes remote stock.
+  for(const product of payload.products||[]){
+    const id=String(product.id),previous=base.products.has(id)?JSON.parse(base.products.get(id)):missing;
+    if(!equal(previous,product))changes.push({ref:doc(productsRef(slug),id),base:previous,value:product});
+  }
+  await commitChanges(slug,user,changes);
+}
+async function writeFinance(slug,payload,user,base=captureFinance()){
+  const changes=[];
+  // Treat absent financial documents as empty objects only when actually absent.
+  const add=async(ref,previous,value)=>{
+    if(equal(previous,value))return;
+    changes.push({ref,base:previous,value});
+  };
+  if(!equal(base.costs,payload.costs||{}))await add(financeRef(slug),{costs:base.costs||{}},{costs:payload.costs||{}});
+  for(const month of new Set([...Object.keys(base.months||{}),...Object.keys(payload.months||{})])){
+    const previous=base.months[month]||{sales:[],expenses:[]},value=payload.months?.[month]||{sales:[],expenses:[]};
+    if(!equal(previous,value))changes.push({ref:doc(financeMonthsRef(slug),month),base:base.months[month]||missing,value});
+  }
+  // A missing costs document has an empty baseline, not an existing {costs:{}} document.
+  if(changes.some(c=>c.ref.path===financeRef(slug).path)){
+    const snap=await getDoc(financeRef(slug));
+    if(!snap.exists()&&!Object.keys(base.costs||{}).length)changes.find(c=>c.ref.path===financeRef(slug).path).base=missing;
+  }
+  await commitChanges(slug,user,changes);
+}
+async function recordSale(slug,id){
+  const user=currentUser;if(!user||!ownerForCurrentShop)throw Error('Entre como proprietária.');
+  const day=localDate(),saleId='s-'+crypto.randomUUID();
+  await runTransaction(db,async tx=>{
+    const owner=await tx.get(shopRef(slug)),pr=doc(productsRef(slug),String(id)),mr=doc(financeMonthsRef(slug),day.slice(0,7));
+    const ps=await tx.get(pr),fs=await tx.get(financeRef(slug)),ms=await tx.get(mr);
+    if(!owner.exists()||owner.data().ownerUid!==user.uid||!shopIsActive(owner.data()))throw Error('Loja sem permissão.');
+    if(!ps.exists())throw Error('Produto excluído.');
+    const p=ps.data(),stock=stockOf(p);
+    if(p.status!=='available'||stock<1)throw Error('Produto sem estoque disponível.');
+    const ledger=ms.exists()?ms.data():{sales:[],expenses:[]};
+    tx.update(pr,{stock:stock-1,status:stock===1?'sold':'available'});
+    tx.set(mr,{...ledger,sales:[...(ledger.sales||[]),{id:saleId,productId:String(id),name:p.name,date:day,amount:Number(p.price)||0,cost:Number(fs.exists()?fs.data().costs?.[id]||0:0)}]});
+  });
 }
 
-async function writeFinance(slug,payload,user){
-  const shopSnap=await getDoc(shopRef(slug));
-  if(!shopSnap.exists()||shopSnap.data().ownerUid!==user.uid||!shopIsActive(shopSnap.data()))throw Object.assign(new Error("A gravação financeira foi bloqueada."),{code:"permission-denied"});
-  await setDoc(financeRef(slug),{costs:payload.costs||{}});
-  const incoming=payload.months||{},batch=writeBatch(db);
-  for(const [month,ledger] of Object.entries(incoming))batch.set(doc(financeMonthsRef(slug),month),ledger);
-  // Um mês ausente na cópia local não deve apagar histórico salvo no Firebase.
-  if(Object.keys(incoming).length)await batch.commit();
-}
 let unsubFinance=null,unsubFinanceMonths=null,financeTimer=null;
 function stopFinanceListeners(){if(unsubFinance)unsubFinance();if(unsubFinanceMonths)unsubFinanceMonths();unsubFinance=null;unsubFinanceMonths=null;financeLoaded=false}
 function listenFinance(slug,user){
  stopFinanceListeners();let docReady=false,monthsReady=false,costs={},months={};
- const publish=()=>{if(!docReady||!monthsReady)return;const cloud={costs,months};if(Object.keys(costs).length||Object.keys(months).length){window.applyCloudFinance(cloud)}else if(!financeLoaded||Object.keys(financeData.costs||{}).length||Object.keys(financeData.months||{}).length){if(publish.started)return;publish.started=true;const local=JSON.parse(JSON.stringify(financeData));writeFinance(slug,local,user).then(()=>window.applyCloudFinance(local)).catch(()=>window.handleCloudError("Não foi possível salvar o financeiro desta loja."))}else window.applyCloudFinance(cloud)};
+ const publish=()=>{if(!docReady||!monthsReady)return;const cloud={costs,months};remoteFinance=JSON.parse(JSON.stringify(cloud));window.applyCloudFinance(cloud)};
  unsubFinance=onSnapshot(financeRef(slug),snapshot=>{docReady=true;costs=snapshot.exists()?snapshot.data().costs||{}:{};publish()},error=>window.handleCloudError("Não foi possível carregar os custos privados."));
  unsubFinanceMonths=onSnapshot(financeMonthsRef(slug),snapshot=>{monthsReady=true;months=Object.fromEntries(snapshot.docs.map(item=>[item.id,item.data()]));publish()},error=>window.handleCloudError("Não foi possível carregar os meses salvos."));
 }
@@ -1064,11 +1119,12 @@ function listenShop(slug,user){
 let shopWatch=null,activeShopListening=null,lastShopSnap=null,currentWatch=null,lastActive=null;
 function stopShopListeners(){if(unsubProducts)unsubProducts();if(unsubSettings)unsubSettings();unsubProducts=null;unsubSettings=null;activeShopListening=null}
 window.firebaseBridge={
+  recordSale,
   signIn:async(email,password)=>signInWithEmailAndPassword(auth,email,password),
   resetPassword:email=>sendPasswordResetEmail(auth,email),
   signOut:()=>signOut(auth),
-  deleteProduct:async(slug,id)=>{if(!currentUser||!ownerForCurrentShop||slug!==window.currentShopId)throw Error("Sem autorização para excluir.");clearTimeout(saveTimer);const shop=await getDoc(shopRef(slug));if(!shop.exists()||shop.data().ownerUid!==currentUser.uid||!shopIsActive(shop.data()))throw Error("Acesso não autorizado.");await deleteDoc(doc(productsRef(slug),id));remoteProducts.delete(id)},queueSave:(slug,payload)=>{if(!currentUser||!ownerForCurrentShop)return;clearTimeout(saveTimer);const copy=JSON.parse(JSON.stringify(payload));saveTimer=setTimeout(()=>writeData(slug,copy,currentUser).catch(error=>window.handleCloudError(error.code==="permission-denied"?"A gravação foi bloqueada. Confira se esta conta está liberada.":"Falha ao sincronizar. Confira sua conexão e tente salvar novamente.")),700)},saveStorefrontNow:async(slug,payload)=>{if(!currentUser||!ownerForCurrentShop)throw Object.assign(new Error("Entre com a conta proprietária desta loja para salvar."),{code:"permission-denied"});clearTimeout(saveTimer);await writeData(slug,payload,currentUser)},
-  queueFinanceSave:(slug,payload)=>{if(!currentUser||!ownerForCurrentShop)return;clearTimeout(financeTimer);const copy=JSON.parse(JSON.stringify(payload));financeTimer=setTimeout(()=>writeFinance(slug,copy,currentUser).catch(error=>window.handleCloudError(error.code==="permission-denied"?"A gravação financeira foi bloqueada pelas regras.":"Falha ao sincronizar o financeiro.")),700)},
+  deleteProduct:async(slug,id)=>{if(!currentUser||!ownerForCurrentShop||slug!==window.currentShopId)throw Error("Sem autorização para excluir.");clearTimeout(saveTimer);const shop=await getDoc(shopRef(slug));if(!shop.exists()||shop.data().ownerUid!==currentUser.uid||!shopIsActive(shop.data()))throw Error("Acesso não autorizado.");await deleteDoc(doc(productsRef(slug),id));remoteProducts.delete(id)},queueSave:(slug,payload)=>{if(!currentUser||!ownerForCurrentShop)return;clearTimeout(saveTimer);const copy=JSON.parse(JSON.stringify(payload)),base=captureStore(),user=currentUser;saveTimer=setTimeout(()=>writeData(slug,copy,user,base).catch(error=>window.handleCloudError(error.code==="store/conflict"?error.message:error.code==="permission-denied"?"A gravação foi bloqueada. Confira se esta conta está liberada.":"Falha ao sincronizar. Confira sua conexão e tente salvar novamente.")),700)},saveStorefrontNow:async(slug,payload)=>{if(!currentUser||!ownerForCurrentShop)throw Object.assign(new Error("Entre com a conta proprietária desta loja para salvar."),{code:"permission-denied"});clearTimeout(saveTimer);await writeData(slug,payload,currentUser)},
+  queueFinanceSave:(slug,payload)=>{if(!currentUser||!ownerForCurrentShop)return;clearTimeout(financeTimer);const copy=JSON.parse(JSON.stringify(payload)),base=captureFinance(),user=currentUser;financeTimer=setTimeout(()=>writeFinance(slug,copy,user,base).catch(error=>window.handleCloudError(error.code==="store/conflict"?error.message:error.code==="permission-denied"?"A gravação financeira foi bloqueada pelas regras.":"Falha ao sincronizar o financeiro.")),700)},
   createStore:async(email,password,storeName,slug,ownerPhone="")=>{
     const current=await getDoc(shopRef(slug));
     if(current.exists())throw Object.assign(new Error("Este endereço de loja já está em uso."),{code:"store/slug-taken"});
@@ -1116,3 +1172,4 @@ onAuthStateChanged(auth,async user=>{
 <script>if(window.isSignupPage&&window.toggleRegisterMode&&window.openAuthModal){window.toggleRegisterMode(true);window.openAuthModal()}</script>
 </body>
 </html>
+
