@@ -817,7 +817,7 @@ function renderAdmin(){
 }
 function markSold(id){const p=data.products.find(x=>x.id===id);if(p){p.status="sold";persist();renderProducts();toast("Peça marcada como vendida.")}}
 function restoreItem(id){const p=data.products.find(x=>x.id===id);if(p){p.status="available";persist();renderProducts();toast("Peça voltou à vitrine.")}}
-function deleteItem(id){data.products=data.products.filter(x=>x.id!==id);cart=cart.filter(x=>x.id!==id);persist();renderProducts();renderAdmin();renderCart();toast("Peça removida do estoque.")}
+async function deleteItem(id){const p=data.products.find(x=>String(x.id)===String(id));if(!p)return toast("Peça não encontrada.");if(!confirm('Excluir definitivamente "'+p.name+'"? Esta ação não pode ser desfeita.'))return;if(!window.isStoreOwner||!window.firebaseBridge?.deleteProduct)return toast("Entre como proprietária para excluir.");try{await window.firebaseBridge.deleteProduct(storeId,String(id));data.products=data.products.filter(x=>String(x.id)!==String(id));cart=cart.filter(x=>String(x.id)!==String(id));if(typeof saveCart==="function")saveCart();persist(true);renderProducts();renderAdmin();renderCart();toast("Peça excluída da loja.")}catch(error){toast("Falha ao excluir. Confira sua conexão e tente novamente.")}}
 function renderOrders(){
  const el=document.getElementById("orderList");if(!el)return;
  el.innerHTML=data.orders.length?data.orders.map(o=>'<div class="order-card"><div style="display:flex;justify-content:space-between;gap:10px;align-items:center"><b>'+escapeHtml(o.id)+' · '+escapeHtml(o.buyer)+'</b><span class="order-state '+(o.status==="paid"?"paid":"")+'">'+(o.status==="paid"?"Pago (simulado)":"Aguardando Pix")+'</span></div><div class="admin-note" style="margin-top:8px">'+o.items.map(i=>escapeHtml(i.name)+" · "+escapeHtml(i.code)).join("<br>")+'<br>Total: <b>'+money(o.total)+'</b> · WhatsApp: '+escapeHtml(o.phone)+'</div></div>').join(""):'<div class="empty">Ainda não há pedidos.</div>';
@@ -987,7 +987,7 @@ renderProducts();
 <script type="module">
 import { initializeApp } from "https://www.gstatic.com/firebasejs/13.0.0/firebase-app.js";
 import { getAuth, onAuthStateChanged, signInWithEmailAndPassword, createUserWithEmailAndPassword, sendPasswordResetEmail, signOut, deleteUser } from "https://www.gstatic.com/firebasejs/13.0.0/firebase-auth.js";
-import { getFirestore, doc, getDoc, setDoc, updateDoc, getDocs, runTransaction, collection, onSnapshot, writeBatch, serverTimestamp } from "https://www.gstatic.com/firebasejs/13.0.0/firebase-firestore.js";
+import { getFirestore, doc, getDoc, setDoc, updateDoc, deleteDoc, getDocs, runTransaction, collection, onSnapshot, writeBatch, serverTimestamp } from "https://www.gstatic.com/firebasejs/13.0.0/firebase-firestore.js";
 
 const firebaseConfig = {
   apiKey: "AIzaSyAkKDVWiScfRWBWmQ270o3T2-5EbtlKT_Y",
@@ -1019,10 +1019,10 @@ async function writeData(slug,payload,user){
   const incoming=new Map((payload.products||[]).map(product=>[String(product.id),product]));
   const operations=[];
   for(const [id,product] of incoming){const json=safeJson(product);if(remoteProducts.get(id)!==json)operations.push({type:"set",id,product,json})}
-  for(const id of remoteProducts.keys())if(!incoming.has(id))operations.push({type:"delete",id});
+  // Exclusões exigem confirmação e ação direta; snapshots locais nunca apagam produtos.
   for(let offset=0;offset<operations.length;offset+=400){
     const batch=writeBatch(db);
-    for(const op of operations.slice(offset,offset+400)){const ref=doc(productsRef(slug),op.id);if(op.type==="set")batch.set(ref,op.product);else batch.delete(ref)}
+    for(const op of operations.slice(offset,offset+400)){const ref=doc(productsRef(slug),op.id);batch.set(ref,op.product)}
     await batch.commit();
   }
   remoteProducts=new Map([...incoming].map(([id,product])=>[id,safeJson(product)]));
@@ -1032,9 +1032,9 @@ async function writeFinance(slug,payload,user){
   const shopSnap=await getDoc(shopRef(slug));
   if(!shopSnap.exists()||shopSnap.data().ownerUid!==user.uid||!shopIsActive(shopSnap.data()))throw Object.assign(new Error("A gravação financeira foi bloqueada."),{code:"permission-denied"});
   await setDoc(financeRef(slug),{costs:payload.costs||{}});
-  const current=await getDocs(financeMonthsRef(slug)),incoming=payload.months||{},batch=writeBatch(db);
+  const incoming=payload.months||{},batch=writeBatch(db);
   for(const [month,ledger] of Object.entries(incoming))batch.set(doc(financeMonthsRef(slug),month),ledger);
-  for(const old of current.docs)if(!Object.prototype.hasOwnProperty.call(incoming,old.id))batch.delete(old.ref);
+  // Um mês ausente na cópia local não deve apagar histórico salvo no Firebase.
   if(current.docs.length||Object.keys(incoming).length)await batch.commit();
 }
 let unsubFinance=null,unsubFinanceMonths=null,financeTimer=null;
@@ -1067,7 +1067,7 @@ window.firebaseBridge={
   signIn:async(email,password)=>signInWithEmailAndPassword(auth,email,password),
   resetPassword:email=>sendPasswordResetEmail(auth,email),
   signOut:()=>signOut(auth),
-  queueSave:(slug,payload)=>{if(!currentUser||!ownerForCurrentShop)return;clearTimeout(saveTimer);const copy=JSON.parse(JSON.stringify(payload));saveTimer=setTimeout(()=>writeData(slug,copy,currentUser).catch(error=>window.handleCloudError(error.code==="permission-denied"?"A gravação foi bloqueada. Confira se esta conta está liberada.":"Falha ao sincronizar. Confira sua conexão e tente salvar novamente.")),700)},saveStorefrontNow:async(slug,payload)=>{if(!currentUser||!ownerForCurrentShop)throw Object.assign(new Error("Entre com a conta proprietária desta loja para salvar."),{code:"permission-denied"});clearTimeout(saveTimer);await writeData(slug,payload,currentUser)},
+  deleteProduct:async(slug,id)=>{if(!currentUser||!ownerForCurrentShop||slug!==window.currentShopId)throw Error("Sem autorização para excluir.");clearTimeout(saveTimer);const shop=await getDoc(shopRef(slug));if(!shop.exists()||shop.data().ownerUid!==currentUser.uid||!shopIsActive(shop.data()))throw Error("Acesso não autorizado.");await deleteDoc(doc(productsRef(slug),id));remoteProducts.delete(id)},queueSave:(slug,payload)=>{if(!currentUser||!ownerForCurrentShop)return;clearTimeout(saveTimer);const copy=JSON.parse(JSON.stringify(payload));saveTimer=setTimeout(()=>writeData(slug,copy,currentUser).catch(error=>window.handleCloudError(error.code==="permission-denied"?"A gravação foi bloqueada. Confira se esta conta está liberada.":"Falha ao sincronizar. Confira sua conexão e tente salvar novamente.")),700)},saveStorefrontNow:async(slug,payload)=>{if(!currentUser||!ownerForCurrentShop)throw Object.assign(new Error("Entre com a conta proprietária desta loja para salvar."),{code:"permission-denied"});clearTimeout(saveTimer);await writeData(slug,payload,currentUser)},
   queueFinanceSave:(slug,payload)=>{if(!currentUser||!ownerForCurrentShop)return;clearTimeout(financeTimer);const copy=JSON.parse(JSON.stringify(payload));financeTimer=setTimeout(()=>writeFinance(slug,copy,currentUser).catch(error=>window.handleCloudError(error.code==="permission-denied"?"A gravação financeira foi bloqueada pelas regras.":"Falha ao sincronizar o financeiro.")),700)},
   createStore:async(email,password,storeName,slug,ownerPhone="")=>{
     const current=await getDoc(shopRef(slug));
