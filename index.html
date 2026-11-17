@@ -841,12 +841,14 @@ window.openAuthModal=openAuthModal;window.toggleRegisterMode=toggleRegisterMode;
 if(!/^https?:$/.test(location.protocol)){setTimeout(()=>{toast("Abra pelo endereço do seu site. Aberto direto do celular, o Firebase não funciona.");if(window.isAdminRoute)authMessage("Este arquivo foi aberto direto do celular. Para entrar, abra pelo endereço do seu site (ex.: https://seusite/painel.html).")},600)}
 else setTimeout(()=>{if(!window.firebaseBridge){toast("Não consegui conectar ao Firebase. Confira a internet e recarregue.");if(window.isAdminRoute)authMessage("Não consegui conectar ao Firebase. Confira a internet e recarregue a página.")}},15000);
 (function(){const nameEl=document.getElementById("appName"),mark=document.getElementById("appMark");if(nameEl)nameEl.textContent=APP_NAME.toLocaleUpperCase("pt-BR");if(mark&&APP_LOGO){mark.innerHTML='<img src="'+APP_LOGO+'" alt="" style="width:100%;height:100%;object-fit:contain;border-radius:50%">'}})();
-/* ===== Versão 7: ramos de loja, vitrine nova, sacola com cupom, Pix e brinde ===== */
+/* ===== Versão 8: ramos de loja, vitrine nova, sacola com cupom, Pix e brinde ===== */
 var STORE_TYPES={
  brecho:{label:"Brechó",noun:"peça",nounPl:"peças",fem:true,cats:["Blusas","Calças","Vestidos","Saias","Casacos","Bolsas","Calçados","Acessórios"],variant:"Tamanho",size:true,condition:true,unique:true,measure:"Medidas"},
  roupas:{label:"Roupas e moda",noun:"peça",nounPl:"peças",fem:true,cats:["Blusas","Calças","Vestidos","Saias","Conjuntos","Acessórios"],variant:"Tamanho",size:true,measure:"Medidas"},
  calcados:{label:"Calçados e bolsas",noun:"produto",nounPl:"produtos",cats:["Tênis","Sandálias","Botas","Bolsas","Acessórios"],variant:"Numeração",size:true,measure:"Medidas"},
+ bijuterias:{label:"Bijuterias",noun:"bijuteria",nounPl:"bijuterias",fem:true,cats:["Brincos","Colares","Anéis","Pulseiras","Tornozeleiras","Conjuntos","Acessórios"],variant:"Modelo",measure:"Material / medidas"},
  semijoias:{label:"Semijoias e acessórios",noun:"produto",nounPl:"produtos",cats:["Brincos","Colares","Anéis","Pulseiras","Conjuntos"],variant:"Modelo",measure:"Tamanho / medidas"},
+ artigos_religiosos:{label:"Artigos religiosos",noun:"artigo",nounPl:"artigos",cats:["Imagens","Guias e colares","Velas","Incensos","Ervas","Acessórios","Outros"],variant:"Modelo",measure:"Tamanho / detalhes"},
  artesanato:{label:"Artesanato e crochê",noun:"peça",nounPl:"peças",fem:true,cats:["Amigurumi","Bolsas","Decoração","Vestuário","Encomendas"],variant:"Cor",measure:"Tamanho / medidas"},
  confeitaria:{label:"Doces e confeitaria",noun:"produto",nounPl:"produtos",cats:["Bolos","Docinhos","Salgados","Kits","Encomendas"],variant:"Sabor",measure:"Rendimento / peso"},
  velas:{label:"Velas, sabonetes e aromas",noun:"produto",nounPl:"produtos",cats:["Velas","Sabonetes","Aromatizadores","Kits"],variant:"Aroma",measure:"Peso / tamanho"},
