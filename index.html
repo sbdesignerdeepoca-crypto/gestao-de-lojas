@@ -323,6 +323,7 @@ body.signup-page .modal-head h3{font-size:30px}
 </style>
 </head>
 <body>
+<script src="aye-config.js"></script>
 <script>window.isSignupPage=/\/cadastro(\.html)?$/.test(location.pathname);window.isAdminRoute=/\/painel(\.html)?$/.test(location.pathname)||new URLSearchParams(location.search).has("painel")||window.isSignupPage;if(window.isAdminRoute)document.body.classList.add("admin-page");if(window.isSignupPage)document.body.classList.add("signup-page");</script>
 <svg width="0" height="0" style="position:absolute" aria-hidden="true">
  <symbol id="i-menu" viewBox="0 0 24 24"><path d="M4 7h16M4 12h16M4 17h16" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></symbol>
@@ -607,6 +608,7 @@ function createDefaultStorefront(shopId=storeId,shopName=""){
  const sf=JSON.parse(JSON.stringify(DEFAULT_STOREFRONT));
  const name=shopName||"Minha loja";
  sf.storeName=name;sf.footerBrand=name.toUpperCase();
+ const preset=window.ayeStoreDefaults?.(shopId);if(preset)Object.assign(sf,preset.storefront);
  return sf;
 }
 function getShopId(){const params=new URLSearchParams(location.search),raw=params.get("painel")||params.get("loja")||LOJA_PADRAO;const id=String(raw||"").toLowerCase().trim();return /^[a-z0-9-]{3,36}$/.test(id)?id:(LOJA_PADRAO||"sem-loja")}
@@ -614,7 +616,7 @@ if(window.isAdminRoute)document.getElementById("admin").classList.add("open");
 window.isBlankPreview=new URLSearchParams(location.search).get("modelo")==="vazio";let storeId=window.isBlankPreview?"modelo-vazio":getShopId(),KEY="gato-retinto-store-demo-v1:"+storeId;window.currentShopId=storeId;window.isStoreOwner=false;if(window.isBlankPreview)document.body.classList.add("blank-preview");
 let data=loadData(), category="Todas", cart=[], currentOrderId=null;if(window.isBlankPreview){const blank={...JSON.parse(JSON.stringify(DEFAULT_STOREFRONT)),storeName:"Sua loja",announcement:"",heroEyebrow:"",heroTitle:"Sua loja, do seu jeito",heroDescription:"Personalize sua vitrine, adicione sua logo e cadastre seus produtos no painel da loja.",heroButtonLabel:"Ver produtos",catalogKicker:"Recém chegados",catalogTitle:"Lançamentos",footerBrand:"SUA LOJA",footerTagline:"",infoTitle1:"",infoText1:"",infoTitle2:"",infoText2:"",infoTitle3:"",infoText3:"",links:[]};data={products:[],orders:[],settings:{pix:"",holder:"",shopWhatsApp:"",logo:"",categories:[...DEFAULT_CATEGORIES],storefront:blank}}}
 window.getStoreData=()=>data;
-window.setNewTenantData=(slug,storeName)=>{storeId=slug;window.currentShopId=slug;KEY="gato-retinto-store-demo-v1:"+slug;data={products:[],orders:[],settings:{pix:"",holder:"",shopWhatsApp:"",logo:"",categories:[...DEFAULT_CATEGORIES],storefront:createDefaultStorefront(slug,storeName)}};localStorage.setItem(KEY,JSON.stringify(data));financeData=blankFinance();saveFinanceLocal();renderProducts()};
+window.setNewTenantData=(slug,storeName)=>{storeId=slug;window.currentShopId=slug;KEY="gato-retinto-store-demo-v1:"+slug;data={products:[],orders:[],settings:window.ayeStoreDefaults?.(slug)||{pix:"",holder:"",shopWhatsApp:"",logo:"",categories:[...DEFAULT_CATEGORIES],storefront:createDefaultStorefront(slug,storeName)}};localStorage.setItem(KEY,JSON.stringify(data));financeData=blankFinance();saveFinanceLocal();renderProducts()};
 window.applyCloudStore=(cloud)=>{if(cloud&&Array.isArray(cloud.products))data.products=cloud.products;if(cloud&&cloud.settings){const current=data.settings||{},defaults=createDefaultStorefront(storeId),oldStorefront=current.storefront||{},remoteStorefront=cloud.settings.storefront||{};data.settings={...current,...cloud.settings};data.settings.storefront={...defaults,...oldStorefront,...remoteStorefront,links:Array.isArray(remoteStorefront.links)?remoteStorefront.links:Array.isArray(oldStorefront.links)?oldStorefront.links:[...defaults.links]};if(!Array.isArray(data.settings.categories))data.settings.categories=[...DEFAULT_CATEGORIES]}persist(true);window.__cloudLoaded=true;renderProducts();openSharedProduct()};
 function supportUrl(text){let phone=String(window.platformWhatsApp||"").replace(/\D/g,"");if(!phone)return "";if(phone.length<=11)phone="55"+phone;return "https://wa.me/"+phone+"?text="+encodeURIComponent(text)}
 function accessReason(state){return state.expired?"O plano desta loja venceu. Fale com o suporte para renovar: o painel volta na hora, com tudo salvo.":state.suspended?"O acesso desta loja está suspenso. Fale com o suporte para reativar.":state.pending?"Cadastro recebido! O painel será liberado depois que o pagamento for confirmado.":""}
@@ -650,7 +652,8 @@ function loadData(){
    return {...d,orders:d.orders||[],settings};
   }
  }catch(e){}
- const sf=createDefaultStorefront(storeId);
+ const sf=createDefaultStorefront(storeId),aye=window.ayeStoreDefaults?.(storeId);
+ if(aye)return {products:[],orders:[],settings:aye};
  return {products:[],orders:[],settings:{pix:"",holder:"",shopWhatsApp:"",logo:"",categories:[...DEFAULT_CATEGORIES],storefront:sf}};
 }
 function persist(skipCloud=false){const serialized=JSON.stringify(data);try{if(serialized.length<=2000000)localStorage.setItem(KEY,serialized)}catch(e){toast("O armazenamento local está cheio; as alterações serão enviadas ao Firebase.")}if(!skipCloud&&window.isStoreOwner&&window.firebaseBridge)window.firebaseBridge.queueSave(storeId,data)}
@@ -1117,6 +1120,8 @@ function listenShop(slug,user){
   unsubSettings=onSnapshot(settingsRef(slug),snapshot=>{
     settingsReady=true;cloudSettings=snapshot.exists()?snapshot.data().settings:null;
     remoteSettingsJson=cloudSettings?safeJson({settings:cloudSettings}):"";publish();
+    const aye=window.ayeStoreDefaults?.(slug),identity=currentUser;
+    if(!snapshot.exists()&&aye&&ownerForCurrentShop&&identity){runTransaction(db,async tx=>{const shop=await tx.get(shopRef(slug)),settings=await tx.get(settingsRef(slug));if(shop.exists()&&shop.data().ownerUid===identity.uid&&shopIsActive(shop.data())&&!settings.exists())tx.set(settingsRef(slug),{settings:aye})}).catch(()=>window.handleCloudError("Entre novamente no painel para concluir a personalização AYE."));}
   },error=>window.handleCloudError("Erro ao carregar as configurações da loja."));
 }
 
@@ -1132,7 +1137,9 @@ window.firebaseBridge={
   createStore:async(email,password,storeName,slug,ownerPhone="")=>{
     const current=await getDoc(shopRef(slug));
     if(current.exists())throw Object.assign(new Error("Este endereço de loja já está em uso."),{code:"store/slug-taken"});
-    const credential=await createUserWithEmailAndPassword(auth,email,password),user=credential.user;
+    let credential,createdAccount=false;
+    if(window.ayeStoreDefaults?.(slug)){try{credential=await createUserWithEmailAndPassword(auth,email,password);createdAccount=true}catch(error){if(error.code!=="auth/email-already-in-use")throw error;credential=await signInWithEmailAndPassword(auth,email,password)}}else{credential=await createUserWithEmailAndPassword(auth,email,password);createdAccount=true}
+    const user=credential.user;
     let shopCreated=false;
     try{
       await runTransaction(db,async transaction=>{const ref=shopRef(slug),existing=await transaction.get(ref);if(existing.exists())throw Object.assign(new Error("Este endereço de loja já está em uso."),{code:"store/slug-taken"});transaction.set(ref,{ownerUid:user.uid,storeName,subscriptionStatus:"pending",createdAt:serverTimestamp()});transaction.set(doc(db,"lojas",slug,"privado","contato"),{email:user.email||email,phone:String(ownerPhone||""),createdAt:serverTimestamp()})});
@@ -1140,7 +1147,7 @@ window.firebaseBridge={
       window.setNewTenantData(slug,storeName);
       remoteProducts=new Map();remoteSettingsJson="";
       location.href=new URL("painel.html?loja="+encodeURIComponent(slug),location.href).href;
-    }catch(error){if(shopCreated){location.href=new URL("painel.html?loja="+encodeURIComponent(slug),location.href).href}else{try{await deleteUser(user)}catch(cleanupError){try{await signOut(auth)}catch(e){}}}throw error}
+    }catch(error){if(shopCreated){location.href=new URL("painel.html?loja="+encodeURIComponent(slug),location.href).href}else{try{if(createdAccount)await deleteUser(user)}catch(cleanupError){try{await signOut(auth)}catch(e){}}}throw error}
   }
 };
 setInterval(()=>{if(lastShopSnap&&currentWatch&&shopIsActive(lastShopSnap.exists()?lastShopSnap.data():null)!==lastActive)currentWatch(lastShopSnap)},60000);
@@ -1174,6 +1181,7 @@ onAuthStateChanged(auth,async user=>{
 </script>
 
 <script>if(window.isSignupPage&&window.toggleRegisterMode&&window.openAuthModal){window.toggleRegisterMode(true);window.openAuthModal()}</script>
+<script>window.prefillAyeSignup?.();</script>
 </body>
 </html>
 
