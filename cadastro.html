@@ -1021,7 +1021,14 @@ platformConfigPromise.then(cfg=>{window.platformWhatsApp=String(cfg.whatsapp||""
 
 // Three-way merge: keep remote changes, apply only local edits, reject conflicting edits.
 const missing=Symbol('missing');
-const equal=(a,b)=>a===b||(a!==missing&&b!==missing&&JSON.stringify(a)===JSON.stringify(b));
+// Firestore maps are unordered. Array order remains significant for storefront links.
+function equal(a,b){
+  if(a===b)return true;
+  if(a===missing||b===missing||a===null||b===null||typeof a!=="object"||typeof b!=="object")return false;
+  if(Array.isArray(a)||Array.isArray(b))return Array.isArray(a)&&Array.isArray(b)&&a.length===b.length&&a.every((value,index)=>equal(value,b[index]));
+  const keys=Object.keys(a);
+  return keys.length===Object.keys(b).length&&keys.every(key=>Object.hasOwn(b,key)&&equal(a[key],b[key]));
+}
 function mergeChanges(base,local,remote){
   if(equal(base,local))return remote;
   if(equal(base,remote)||equal(local,remote))return local;
