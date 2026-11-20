@@ -294,6 +294,9 @@ body.admin-page #topline,body.admin-page .v7-hero,body.admin-page .v7-social,bod
 .banner-prev{display:block;width:100%;max-height:180px;object-fit:cover;border-radius:10px;margin-top:8px;border:1px solid var(--line)}
 .stock-tag{display:inline-block;margin-left:6px;font-size:11px;color:#7a560c;background:#fff6dc;border-radius:10px;padding:1px 7px}
 
+
+/* Informational HTTPS badge, shared by every current and future storefront. */
+.https-trust[hidden]{display:none!important}.https-trust{display:block;max-width:340px;font-size:12px;line-height:1.5;text-align:left}.https-trust summary{display:flex;align-items:center;justify-content:center;gap:8px;cursor:pointer;list-style:none;border:1px solid #c5a45e88;border-radius:999px;padding:9px 15px;color:inherit;background:#c5a45e12;font-weight:600}.https-trust summary::-webkit-details-marker{display:none}.https-trust svg{width:19px;height:19px;flex:none;color:var(--gold)}.https-trust summary:focus-visible{outline:2px solid var(--gold);outline-offset:4px}.https-trust p{margin:10px 0 0;font-size:12px;line-height:1.6;color:inherit}
 </style>
 <style>
 @media(max-width:570px){body.admin-page .nav-actions .light{display:block;padding:8px 9px;font-size:8px;letter-spacing:.04em}.link-editor-row{grid-template-columns:1fr}.admin-tabs{overflow-x:auto}.admin-tabs button{flex:0 0 auto}}
@@ -323,7 +326,7 @@ body.signup-page .modal-head h3{font-size:30px}
 </style>
 </head>
 <body>
-<script src="aye-config.js"></script>
+<script src="aye-config.js?v=20261120-esotericos"></script>
 <script>window.isSignupPage=/\/cadastro(\.html)?$/.test(location.pathname);window.isAdminRoute=/\/painel(\.html)?$/.test(location.pathname)||new URLSearchParams(location.search).has("painel")||window.isSignupPage;if(window.isAdminRoute)document.body.classList.add("admin-page");if(window.isSignupPage)document.body.classList.add("signup-page");</script>
 <svg width="0" height="0" style="position:absolute" aria-hidden="true">
  <symbol id="i-menu" viewBox="0 0 24 24"><path d="M4 7h16M4 12h16M4 17h16" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></symbol>
@@ -514,7 +517,7 @@ body.signup-page .modal-head h3{font-size:30px}
     </div>
   </section>
 </main>
-<footer><span id="footerBrand"></span><span id="footerTagline"></span><span class="notice">Pedidos pelo WhatsApp · pagamento combinado com a loja</span></footer>
+<footer><span id="footerBrand"></span><span id="footerTagline"></span><span class="notice">Pedidos pelo WhatsApp · pagamento combinado com a loja</span><details id="httpsTrust" class="https-trust" hidden><summary><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" aria-hidden="true"><path d="M12 3 4 6v6c0 5 8 9 8 9s8-4 8-9V6z"/><path d="m8 12 3 3 5-6"/></svg>Conexão segura · HTTPS</summary><p>HTTPS protege a transmissão dos dados entre seu navegador e esta página.</p></details></footer>
 
 <div class="overlay v7-sheet" id="cartModal" onclick="if(event.target===this)closeModal('cartModal')">
   <div class="modal">
@@ -1242,6 +1245,7 @@ onAuthStateChanged(auth,async user=>{
 
 <script>if(window.isSignupPage&&window.toggleRegisterMode&&window.openAuthModal){window.toggleRegisterMode(true);window.openAuthModal()}</script>
 <script>window.prefillAyeSignup?.();</script>
+<script>document.getElementById("httpsTrust").hidden=location.protocol!=="https:";</script>
 </body>
 </html>
 
