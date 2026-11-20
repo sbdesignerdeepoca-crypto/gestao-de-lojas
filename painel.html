@@ -617,7 +617,7 @@ window.isBlankPreview=new URLSearchParams(location.search).get("modelo")==="vazi
 let data=loadData(), category="Todas", cart=[], currentOrderId=null;if(window.isBlankPreview){const blank={...JSON.parse(JSON.stringify(DEFAULT_STOREFRONT)),storeName:"Sua loja",announcement:"",heroEyebrow:"",heroTitle:"Sua loja, do seu jeito",heroDescription:"Personalize sua vitrine, adicione sua logo e cadastre seus produtos no painel da loja.",heroButtonLabel:"Ver produtos",catalogKicker:"Recém chegados",catalogTitle:"Lançamentos",footerBrand:"SUA LOJA",footerTagline:"",infoTitle1:"",infoText1:"",infoTitle2:"",infoText2:"",infoTitle3:"",infoText3:"",links:[]};data={products:[],orders:[],settings:{pix:"",holder:"",shopWhatsApp:"",logo:"",categories:[...DEFAULT_CATEGORIES],storefront:blank}}}
 window.getStoreData=()=>data;
 window.setNewTenantData=(slug,storeName)=>{storeId=slug;window.currentShopId=slug;KEY="gato-retinto-store-demo-v1:"+slug;data={products:[],orders:[],settings:window.ayeStoreDefaults?.(slug)||{pix:"",holder:"",shopWhatsApp:"",logo:"",categories:[...DEFAULT_CATEGORIES],storefront:createDefaultStorefront(slug,storeName)}};localStorage.setItem(KEY,JSON.stringify(data));financeData=blankFinance();saveFinanceLocal();renderProducts()};
-window.applyCloudStore=(cloud)=>{if(cloud&&Array.isArray(cloud.products))data.products=cloud.products;if(cloud&&cloud.settings){const current=data.settings||{},defaults=createDefaultStorefront(storeId),oldStorefront=current.storefront||{},remoteStorefront=cloud.settings.storefront||{};data.settings={...current,...cloud.settings};data.settings.storefront={...defaults,...oldStorefront,...remoteStorefront,links:Array.isArray(remoteStorefront.links)?remoteStorefront.links:Array.isArray(oldStorefront.links)?oldStorefront.links:[...defaults.links]};if(!Array.isArray(data.settings.categories))data.settings.categories=[...DEFAULT_CATEGORIES]}persist(true);window.__cloudLoaded=true;renderProducts();openSharedProduct()};
+window.applyCloudStore=(cloud)=>{const editing=storefrontEditBase?data.settings.storefront:null;if(cloud&&Array.isArray(cloud.products))data.products=cloud.products;if(cloud&&cloud.settings){const current=data.settings||{},defaults=createDefaultStorefront(storeId),oldStorefront=current.storefront||{},remoteStorefront=cloud.settings.storefront||{};data.settings={...current,...cloud.settings};data.settings.storefront={...defaults,...oldStorefront,...remoteStorefront,links:Array.isArray(remoteStorefront.links)?remoteStorefront.links:Array.isArray(oldStorefront.links)?oldStorefront.links:[...defaults.links]};if(!Array.isArray(data.settings.categories))data.settings.categories=[...DEFAULT_CATEGORIES]}if(editing)data.settings.storefront=editing;persist(true);window.__cloudLoaded=true;renderProducts();openSharedProduct()};
 function supportUrl(text){let phone=String(window.platformWhatsApp||"").replace(/\D/g,"");if(!phone)return "";if(phone.length<=11)phone="55"+phone;return "https://wa.me/"+phone+"?text="+encodeURIComponent(text)}
 function accessReason(state){return state.expired?"O plano desta loja venceu. Fale com o suporte para renovar: o painel volta na hora, com tudo salvo.":state.suspended?"O acesso desta loja está suspenso. Fale com o suporte para reativar.":state.pending?"Cadastro recebido! O painel será liberado depois que o pagamento for confirmado.":""}
 function renderPlanBanner(){
@@ -691,7 +691,18 @@ function socialHref(link,sf){if(link.type==="whatsapp"){const raw=String(data.se
 function renderHeroLinks(){const el=document.getElementById("heroLinks");if(!el)return;const sf=data.settings.storefront||createDefaultStorefront(storeId),links=Array.isArray(sf.links)?sf.links:[],platforms=[["whatsapp","WhatsApp"],["instagram","Instagram"],["group","Grupo VIP"],["tiktok","TikTok"]];el.innerHTML=platforms.map(([platform,label])=>{const link=links.find(item=>item.enabled&&getSocialPlatform(item)===platform),href=link?socialHref(link,sf):"",icon=socialIcon(platform),content=icon+'<span>'+label+'</span>';return href?'<a class="social-link social-logo-link" href="'+escapeHtml(href)+'" aria-label="Abrir '+label+'" target="_blank" rel="noopener noreferrer">'+content+'</a>':'<span class="social-link social-logo-link disabled-link" aria-label="'+label+' sem endereço cadastrado" title="Cadastre o endereço de '+label+' no painel">'+content+'</span>'}).join("")}
 function storefrontFields(){return {"storeName":"sfStoreName","announcement":"sfAnnouncement","heroEyebrow":"sfEyebrow","heroTitle":"sfHeroTitle","heroDescription":"sfHeroDescription","heroButtonLabel":"sfHeroButton","catalogKicker":"sfCatalogKicker","catalogTitle":"sfCatalogTitle","cartButtonLabel":"sfCartButton","addButtonLabel":"sfAddButton","checkoutButtonLabel":"sfCheckoutButton","cartModalTitle":"sfCartTitle","paymentModalTitle":"sfPaymentTitle","sendOrderButtonLabel":"sfSendOrderButton","howKicker":"sfHowKicker","howTitle":"sfHowTitle","howNote":"sfHowNote","footerTagline":"sfFooterTagline","colorInk":"sfColorInk","colorGold":"sfColorGold","colorPaper":"sfColorPaper","howStepTitle1":"sfHowTitle1","howStepText1":"sfHowText1","infoTitle1":"sfInfoTitle1","infoText1":"sfInfoText1","howStepTitle2":"sfHowTitle2","howStepText2":"sfHowText2","infoTitle2":"sfInfoTitle2","infoText2":"sfInfoText2","howStepTitle3":"sfHowTitle3","howStepText3":"sfHowText3","infoTitle3":"sfInfoTitle3","infoText3":"sfInfoText3"}}
 function storefrontColor(key,value){const fallback={colorInk:"#211f1a",colorGold:"#c5a45e",colorPaper:"#f7f4ec"}[key];if(!fallback)return value??"";const color=String(value??"").trim();if(/^#[0-9a-f]{6}$/i.test(color))return color.toLowerCase();if(/^#[0-9a-f]{3}$/i.test(color))return "#"+color.slice(1).split("").map(c=>c+c).join("").toLowerCase();return fallback}
-function renderStorefrontEditor(){const sf=data.settings.storefront||createDefaultStorefront(storeId);for(const [key,id] of Object.entries(storefrontFields())){const el=document.getElementById(id);if(el)el.value=storefrontColor(key,sf[key])}renderStoreLinksEditor()}
+let storefrontEditBase=null;
+function customizationDraftKey(){return KEY+":customization:"+(window.currentAuthUser?.uid||"anonymous")}
+function renderStorefrontEditor(){
+ data.settings.storefront={...createDefaultStorefront(storeId),...(data.settings.storefront||{})};
+ if(!storefrontEditBase){
+   const remote=window.firebaseBridge?.storefrontBaseline?.();
+   storefrontEditBase=JSON.parse(JSON.stringify(remote||data.settings.storefront||createDefaultStorefront(storeId)));
+   try{const saved=JSON.parse(sessionStorage.getItem(customizationDraftKey())||"null");if(saved?.base&&saved?.value){storefrontEditBase=saved.base;data.settings.storefront=saved.value;toast("Rascunho de personalização recuperado. Confira e salve novamente.")}}catch(e){}
+ }
+ const sf=data.settings.storefront||createDefaultStorefront(storeId);for(const [key,id] of Object.entries(storefrontFields())){const el=document.getElementById(id);if(el)el.value=storefrontColor(key,sf[key])}renderStoreLinksEditor()
+}
+
 function renderStoreLinksEditor(){const el=document.getElementById("storeLinksEditor");if(!el)return;const links=data.settings.storefront.links||[];el.innerHTML=links.map((link,i)=>{const platform=link.platform||"auto",logo=platform==="auto"?getSocialPlatform(link):platform,preview=socialIcon(logo),isPhone=link.type==="whatsapp";return '<div class="link-editor-row"><div class="field"><label>Texto do botão</label><input value="'+escapeHtml(link.label||"")+'" oninput="updateStoreLink('+i+',\'label\',this.value)"></div><div class="field"><label>Tipo de link</label><select onchange="updateStoreLink('+i+',\'type\',this.value)"><option value="url" '+(!isPhone?"selected":"")+'>Link próprio (Instagram, grupo, TikTok…)</option><option value="whatsapp" '+(isPhone?"selected":"")+'>WhatsApp da loja</option></select></div><div class="field"><label>Logo do botão</label><select onchange="updateStoreLink('+i+',\'platform\',this.value)"><option value="auto" '+(platform==="auto"?"selected":"")+'>Automático</option><option value="whatsapp" '+(platform==="whatsapp"?"selected":"")+'>WhatsApp</option><option value="instagram" '+(platform==="instagram"?"selected":"")+'>Instagram</option><option value="group" '+(platform==="group"?"selected":"")+'>Grupo VIP</option><option value="tiktok" '+(platform==="tiktok"?"selected":"")+'>TikTok</option><option value="none" '+(platform==="none"?"selected":"")+'>Sem logo</option></select><div class="link-logo-choice">'+preview+'<small>Prévia da logo</small></div></div><div class="field"><label>Endereço do link</label><input value="'+escapeHtml(link.url||"")+'" placeholder="'+(isPhone?"Número com DDI + DDD ou link wa.me":"Cole o link da rede ou grupo")+'" '+(isPhone?"disabled":"")+' onchange="updateStoreLink('+i+',\'url\',this.value)"><small>'+(isPhone?"Usa o telefone/link cadastrado em Pix e loja.":"Pode colar com ou sem https://; Instagram/TikTok também aceitam @usuário.")+'</small><div class="link-status">'+(socialHref(link,data.settings.storefront||createDefaultStorefront(storeId))?"Link pronto para abrir":"Confira o endereço: falta um link válido")+'</div></div><div class="link-actions"><label class="link-enabled"><input type="checkbox" '+(link.enabled?"checked":"")+' onchange="updateStoreLink('+i+',\'enabled\',this.checked)">Mostrar botão</label><button type="button" onclick="moveStoreLink('+i+',-1)" aria-label="Mover para cima">↑</button><button type="button" onclick="moveStoreLink('+i+',1)" aria-label="Mover para baixo">↓</button><button type="button" onclick="removeStoreLink('+i+')">Excluir</button></div></div>'}).join("")}
 function updateStoreLink(index,key,value){const allowed=["label","url","type","enabled","platform"];if(!allowed.includes(key))return;const link=data.settings.storefront.links[index];if(!link)return;link[key]=value;if(key==="type"&&value==="whatsapp")link.url="";renderHeroLinks();if(key==="type"||key==="platform"||key==="url")renderStoreLinksEditor()}
 function addStoreLink(){data.settings.storefront.links.push({id:"link-"+Date.now(),label:"Novo botão",url:"",type:"url",platform:"auto",enabled:true});renderStoreLinksEditor();renderHeroLinks()}
@@ -699,7 +710,10 @@ function removeStoreLink(index){data.settings.storefront.links.splice(index,1);r
 function moveStoreLink(index,delta){const links=data.settings.storefront.links,to=index+delta;if(to<0||to>=links.length)return;[links[index],links[to]]=[links[to],links[index]];renderStoreLinksEditor();renderHeroLinks()}
 function previewStorefront(){const sf=data.settings.storefront;for(const [key,id] of Object.entries(storefrontFields())){const el=document.getElementById(id);if(el)sf[key]=storefrontColor(key,el.value)}applyStorefront()}
 async function saveStorefront(){
+ if(!storefrontEditBase)storefrontEditBase=JSON.parse(JSON.stringify(window.firebaseBridge?.storefrontBaseline?.()||data.settings.storefront));
  previewStorefront();
+ const draft={base:JSON.parse(JSON.stringify(storefrontEditBase)),value:JSON.parse(JSON.stringify(data.settings.storefront))};
+ try{sessionStorage.setItem(customizationDraftKey(),JSON.stringify(draft))}catch(e){}
  persist(true);
  const button=document.querySelector("#panel-customize button[onclick=\"saveStorefront()\"]");
  const status=document.getElementById("storefrontSaveStatus");
@@ -707,7 +721,10 @@ async function saveStorefront(){
  if(status)status.textContent="Enviando as alterações para o Firebase…";
  try{
   if(!window.firebaseBridge?.saveStorefrontNow)throw new Error("A conexão segura com o Firebase não está pronta. Recarregue o painel e tente novamente.");
-  await window.firebaseBridge.saveStorefrontNow(storeId,JSON.parse(JSON.stringify(data)));
+  const saved=await window.firebaseBridge.saveStorefrontNow(storeId,draft);
+  data.settings.storefront=saved;storefrontEditBase=JSON.parse(JSON.stringify(saved));
+  try{sessionStorage.removeItem(customizationDraftKey())}catch(e){}
+  persist(true);applyStorefront();
   if(status)status.textContent="Salvo no Firebase. A vitrine já recebeu as alterações.";
   toast("Personalização confirmada e salva na loja.");
  }catch(error){
@@ -1071,6 +1088,26 @@ async function writeData(slug,payload,user,base=captureStore()){
   }
   await commitChanges(slug,user,changes);
 }
+
+async function writeStorefront(slug,draft,user){
+ if(!draft?.base||!draft?.value)throw Error("Abra a aba Personalização antes de salvar.");
+ return runTransaction(db,async tx=>{
+  const owner=await tx.get(shopRef(slug)),ref=settingsRef(slug),snapshot=await tx.get(ref);
+  if(!owner.exists()||owner.data().ownerUid!==user.uid||!shopIsActive(owner.data()))throw Object.assign(new Error("Loja sem permissão para gravar."),{code:"permission-denied"});
+  const document=snapshot.exists()?snapshot.data():{},settings=document.settings||{};
+  const remote={...createDefaultStorefront(slug),...(settings.storefront||{})},result={...remote};
+  for(const key of new Set([...Object.keys(draft.base),...Object.keys(draft.value)])){
+   const before=Object.hasOwn(draft.base,key)?draft.base[key]:missing,next=Object.hasOwn(draft.value,key)?draft.value[key]:missing;
+   if(equal(before,next))continue;
+   const current=Object.hasOwn(remote,key)?remote[key]:missing;
+   try{const merged=mergeChanges(before,next,current);if(merged===missing)delete result[key];else result[key]=merged}
+   catch(error){if(error.code==="store/conflict"){error.field=key;error.message="Outro salvamento alterou "+(key==="links"?"os botões e links":'o campo "'+key+'"')+". Seu rascunho foi mantido neste navegador."}throw error}
+  }
+  tx.set(ref,{...document,settings:{...settings,storefront:result}});
+  return result;
+ });
+}
+
 async function writeFinance(slug,payload,user,base=captureFinance()){
   const changes=[];
   // Treat absent financial documents as empty objects only when actually absent.
@@ -1156,7 +1193,7 @@ window.firebaseBridge={
   signIn:async(email,password)=>{const credential=await signInWithEmailAndPassword(auth,email,password);authMessage("Login confirmado. Verificando acesso à loja...");await resolveLoginAccess(credential.user)},
   resetPassword:email=>sendPasswordResetEmail(auth,email),
   signOut:()=>signOut(auth),
-  queueSave:(slug,payload)=>{if(!currentUser||!ownerForCurrentShop)return;clearTimeout(saveTimer);const copy=JSON.parse(JSON.stringify(payload)),base=captureStore(),user=currentUser;saveTimer=setTimeout(()=>writeData(slug,copy,user,base).catch(error=>window.handleCloudError(error.code==="store/conflict"?error.message:error.code==="permission-denied"?"A gravação foi bloqueada. Confira se esta conta está liberada.":"Falha ao sincronizar. Confira sua conexão e tente salvar novamente.")),700)},saveStorefrontNow:async(slug,payload)=>{if(!currentUser||!ownerForCurrentShop)throw Object.assign(new Error("Entre com a conta proprietária desta loja para salvar."),{code:"permission-denied"});clearTimeout(saveTimer);await writeData(slug,payload,currentUser)},
+  queueSave:(slug,payload)=>{if(!currentUser||!ownerForCurrentShop)return;clearTimeout(saveTimer);const copy=JSON.parse(JSON.stringify(payload)),base=captureStore(),user=currentUser;if(storefrontEditBase){if(!base.settings)return;copy.settings.storefront=JSON.parse(base.settings).settings?.storefront||{}}saveTimer=setTimeout(()=>writeData(slug,copy,user,base).catch(error=>window.handleCloudError(error.code==="store/conflict"?error.message:error.code==="permission-denied"?"A gravação foi bloqueada. Confira se esta conta está liberada.":"Falha ao sincronizar. Confira sua conexão e tente salvar novamente.")),700)},storefrontBaseline:()=>remoteSettingsJson?{...createDefaultStorefront(window.currentShopId),...(JSON.parse(remoteSettingsJson).settings?.storefront||{})}:null,saveStorefrontNow:async(slug,draft)=>{if(!currentUser||!ownerForCurrentShop||slug!==window.currentShopId)throw Object.assign(new Error("Entre com a conta proprietária desta loja para salvar."),{code:"permission-denied"});clearTimeout(saveTimer);return writeStorefront(slug,draft,currentUser)},
   queueFinanceSave:(slug,payload)=>{if(!currentUser||!ownerForCurrentShop)return;clearTimeout(financeTimer);const copy=JSON.parse(JSON.stringify(payload)),base=captureFinance(),user=currentUser;financeTimer=setTimeout(()=>writeFinance(slug,copy,user,base).catch(error=>window.handleCloudError(error.code==="store/conflict"?error.message:error.code==="permission-denied"?"A gravação financeira foi bloqueada pelas regras.":"Falha ao sincronizar o financeiro.")),700)},
   createStore:async(email,password,storeName,slug,ownerPhone="")=>{
     const current=await getDoc(shopRef(slug));
